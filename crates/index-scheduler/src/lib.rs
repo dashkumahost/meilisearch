@@ -68,7 +68,7 @@ use meilisearch_types::milli::vector::{
 };
 use meilisearch_types::milli::{self, Index};
 use meilisearch_types::task_view::TaskView;
-use meilisearch_types::tasks::enterprise_edition::network::TaskNetwork;
+use meilisearch_types::tasks::enterprise_edition::network::{ImportData, TaskNetwork};
 use meilisearch_types::tasks::{KindWithContent, Task};
 use meilisearch_types::webhooks::{Webhook, WebhooksDumpView, WebhooksView};
 use milli::vector::db::IndexEmbeddingConfig;
@@ -758,18 +758,30 @@ impl IndexScheduler {
         task_id: Option<TaskId>,
         dry_run: bool,
     ) -> Result<Task> {
-        self.register_with_custom_metadata(kind, task_id, None, dry_run)
+        self.register_with_custom_metadata(kind, task_id, None, dry_run, None)
     }
 
     /// Register a new task in the scheduler, with metadata.
     ///
     /// If it fails and data was associated with the task, it tries to delete the associated data.
+    ///
+    /// # Parameters
+    ///
+    /// - task_network: network of the task to check.
+    ///
+    /// If the task is an import task, only accept it if:
+    ///
+    /// 1. There is an ongoing network topology change task
+    /// 2. The task to register matches the network version of the network topology change task
+    ///
+    /// Always accept the task if it is not an import task.
     pub fn register_with_custom_metadata(
         &self,
         kind: KindWithContent,
         task_id: Option<TaskId>,
         custom_metadata: Option<String>,
         dry_run: bool,
+        task_network: Option<TaskNetwork>,
     ) -> Result<Task> {
         // if the task doesn't delete or cancel anything and 40% of the task queue is full, we must refuse to enqueue the incoming task
         if !matches!(&kind, KindWithContent::TaskDeletion { tasks, .. } | KindWithContent::TaskCancelation { tasks, .. } if !tasks.is_empty())
@@ -780,7 +792,14 @@ impl IndexScheduler {
         }
 
         let mut wtxn = self.env.write_txn()?;
-        let task = self.queue.register(&mut wtxn, &kind, task_id, custom_metadata, dry_run)?;
+        let task = self.queue.register(
+            &mut wtxn,
+            &kind,
+            task_id,
+            custom_metadata,
+            dry_run,
+            task_network,
+        )?;
 
         // If the registered task is a task cancelation
         // we inform the processing tasks to stop (if necessary).

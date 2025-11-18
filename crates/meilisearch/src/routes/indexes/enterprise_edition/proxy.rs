@@ -111,6 +111,8 @@ where
 ///
 /// If not, checks whether this remote is the leader and return `MeilisearchHttpError::NotLeader` if not.
 ///
+/// If there is no leader, returns `Ok(None)`
+///
 /// # Errors
 ///
 /// - `MeiliearchHttpError::NotLeader`: if the following are true simultaneously:
@@ -122,17 +124,17 @@ where
 pub fn task_network_and_check_leader(
     req: &HttpRequest,
     network: &meilisearch_types::enterprise_edition::network::Network,
-) -> Result<TaskNetwork, MeilisearchHttpError> {
+) -> Result<Option<TaskNetwork>, MeilisearchHttpError> {
     match (origin_from_req(req)?, import_from_req(req)?) {
         (Some(network_change), Some(import_from)) => {
-            Ok(TaskNetwork::Import { import_from, network_change })
+            Ok(Some(TaskNetwork::Import { import_from, network_change }))
         }
-        (Some(origin), None) => Ok(TaskNetwork::Origin { origin }),
+        (Some(origin), None) => Ok(Some(TaskNetwork::Origin { origin })),
         (None, Some(_)) => Err(MeilisearchHttpError::MissingOriginHeaders),
         (None, None) => {
             match (network.leader.as_deref(), network.local.as_deref()) {
                 // 1. Always allowed if there is no leader
-                (None, _) => (),
+                (None, _) => return Ok(None),
                 // 2. Allowed if the leader is self
                 (Some(leader), Some(this)) if leader == this => (),
                 // 3. Any other change is disallowed
@@ -143,10 +145,10 @@ pub fn task_network_and_check_leader(
                 }
             }
 
-            Ok(TaskNetwork::Remotes {
+            Ok(Some(TaskNetwork::Remotes {
                 remote_tasks: Default::default(),
                 network_version: network.version,
-            })
+            }))
         }
     }
 }

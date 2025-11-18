@@ -362,15 +362,21 @@ pub async fn delete_document(
     };
     let uid = get_task_id(&req, &opt)?;
     let dry_run = is_dry_run(&req, &opt)?;
-    let task = {
+    let mut task = {
         let index_scheduler = index_scheduler.clone();
         tokio::task::spawn_blocking(move || {
-            index_scheduler.register_with_custom_metadata(task, uid, custom_metadata, dry_run)
+            index_scheduler.register_with_custom_metadata(
+                task,
+                uid,
+                custom_metadata,
+                dry_run,
+                task_network,
+            )
         })
         .await??
     };
 
-    if network.leader.is_some() && !dry_run {
+    if let Some(task_network) = task.network.take() {
         proxy(&index_scheduler, Some(&index_uid), &req, task_network, network, Body::none(), &task)
             .await?;
     }
@@ -1091,8 +1097,14 @@ async fn document_addition(
     };
 
     let scheduler = index_scheduler.clone();
-    let task = match tokio::task::spawn_blocking(move || {
-        scheduler.register_with_custom_metadata(task, task_id, custom_metadata, dry_run)
+    let mut task = match tokio::task::spawn_blocking(move || {
+        scheduler.register_with_custom_metadata(
+            task,
+            task_id,
+            custom_metadata,
+            dry_run,
+            task_network,
+        )
     })
     .await?
     {
@@ -1103,7 +1115,7 @@ async fn document_addition(
         }
     };
 
-    if network.leader.is_some() {
+    if let Some(task_network) = task.network.take() {
         if let Some(file) = file {
             proxy(
                 &index_scheduler,
@@ -1221,15 +1233,21 @@ pub async fn delete_documents_batch(
         KindWithContent::DocumentDeletion { index_uid: index_uid.to_string(), documents_ids: ids };
     let uid = get_task_id(&req, &opt)?;
     let dry_run = is_dry_run(&req, &opt)?;
-    let task = {
+    let mut task = {
         let index_scheduler = index_scheduler.clone();
         tokio::task::spawn_blocking(move || {
-            index_scheduler.register_with_custom_metadata(task, uid, custom_metadata, dry_run)
+            index_scheduler.register_with_custom_metadata(
+                task,
+                uid,
+                custom_metadata,
+                dry_run,
+                task_network,
+            )
         })
         .await??
     };
 
-    if network.leader.is_some() && !dry_run {
+    if let Some(task_network) = task.network.take() {
         proxy(
             &index_scheduler,
             Some(&index_uid),
@@ -1329,15 +1347,21 @@ pub async fn delete_documents_by_filter(
 
     let uid = get_task_id(&req, &opt)?;
     let dry_run = is_dry_run(&req, &opt)?;
-    let task = {
+    let mut task = {
         let index_scheduler = index_scheduler.clone();
         tokio::task::spawn_blocking(move || {
-            index_scheduler.register_with_custom_metadata(task, uid, custom_metadata, dry_run)
+            index_scheduler.register_with_custom_metadata(
+                task,
+                uid,
+                custom_metadata,
+                dry_run,
+                task_network,
+            )
         })
         .await??
     };
 
-    if network.leader.is_some() && !dry_run {
+    if let Some(task_network) = task.network.take() {
         proxy(
             &index_scheduler,
             Some(&index_uid),
@@ -1494,15 +1518,21 @@ pub async fn edit_documents_by_function(
 
     let uid = get_task_id(&req, &opt)?;
     let dry_run = is_dry_run(&req, &opt)?;
-    let task = {
+    let mut task = {
         let index_scheduler = index_scheduler.clone();
         tokio::task::spawn_blocking(move || {
-            index_scheduler.register_with_custom_metadata(task, uid, custom_metadata, dry_run)
+            index_scheduler.register_with_custom_metadata(
+                task,
+                uid,
+                custom_metadata,
+                dry_run,
+                task_network,
+            )
         })
         .await??
     };
 
-    if network.leader.is_some() && !dry_run {
+    if let Some(task_network) = task.network.take() {
         proxy(
             &index_scheduler,
             Some(&index_uid),
@@ -1577,16 +1607,22 @@ pub async fn clear_all_documents(
     let uid = get_task_id(&req, &opt)?;
     let dry_run = is_dry_run(&req, &opt)?;
 
-    let task = {
+    let mut task = {
         let index_scheduler = index_scheduler.clone();
 
         tokio::task::spawn_blocking(move || {
-            index_scheduler.register_with_custom_metadata(task, uid, custom_metadata, dry_run)
+            index_scheduler.register_with_custom_metadata(
+                task,
+                uid,
+                custom_metadata,
+                dry_run,
+                task_network,
+            )
         })
         .await??
     };
 
-    if network.leader.is_some() && !dry_run {
+    if let Some(task_network) = task.network.take() {
         proxy(&index_scheduler, Some(&index_uid), &req, task_network, network, Body::none(), &task)
             .await?;
     }
